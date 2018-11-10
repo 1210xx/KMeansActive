@@ -3,56 +3,118 @@ package Classification;
 import java.io.FileReader;
 import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.Random;
+import java.util.PrimitiveIterator.OfDouble;
+import java.util.function.IntPredicate;
 
 import weka.core.Instances;
 
 public class KMeansActive001 {
 
+	/**
+	 * the data of class instance
+	 */
 	Instances data;
 
+	/**
+	 * the states of instances
+	 *  1 represents bought. 
+	 *  2 represents predicted. 
+	 *  0 is untreated. 
+	 */
 	int[] instanceStates; // 1 represents bought and 2 represents predicted.  and 0 is untreated 
 
+	/**
+	 * the decision attribution of instances 
+	 */
 	int[] labels;
 
+	/**
+	 * the center of KMeans 
+	 */
+
 	double[][] currentCenters;
-
-	double tCost;// the cost of teacher 
-
-	double[] mCost; // the cost of misclassification
+	/**
+	 * the cost of teach
+	 */
+	double tCost;
 
 	/**
-	 * 
-	 ***************
-	 * The constructor. Read the data.
-	 ***************
+	 *  the cost of misclassification
 	 */
-	public KMeansActive001(String paraFilename) {
-	// Of the first constructor
+	double[] mCost;
+
+	/**
+	*	The  constructor.Read the data and initialize the misclassification cost and teach cost 
+	* @param paraFilename
+	* @param paraMisclassificationCost
+	* @param paraTeachCost
+	*/
+	public KMeansActive001(String paraFilename, double[] paraMisclassificationCost, double paraTeachCost) {
+		// Of the first constructor
 		data = null;
 		try {
 			FileReader fileReader = new FileReader(paraFilename);
 			data = new Instances(fileReader);
 			fileReader.close();
-			data.setClassIndex(data.numAttributes()-1);
-//			System.out.println("data.instance[data.numAttributes - 1]:  " + data.instance(1).value(data.numAttributes() - 1));
+			data.setClassIndex(data.numAttributes() - 1);
+			//			System.out.println("data.instance[data.numAttributes - 1]:  " + data.instance(1).value(data.numAttributes() - 1));
 		} catch (Exception ee) {
 			System.out.println("Cannot read the file: " + paraFilename + "\r\n" + ee);
 			System.exit(0);
 		} // Of try
-		// Initialize
+			// Initialize
 		instanceStates = new int[data.numInstances()];
 		Arrays.fill(instanceStates, 0);
 		labels = new int[data.numInstances()];
 		Arrays.fill(labels, -1);
-		//DataTest();
+		DataTest();
+
+		mCost = paraMisclassificationCost;
+		tCost = paraTeachCost;
 	}
+
 	/**
 	 ***************
-	 * Learning test.
+	 * The entrance. 
 	 ***************
 	 */
-	void learningTest() {
+	public static void main(String args[]) {
+		//why mcost initialize is {2,4} 
+
+		double[] mCost = { 2, 4 };
+		double tCost = 1;
+		//double avgCost = 0;
+		//		KMeansActive tempLeaner = new KMeansActive("/Users/Rjv587/Downloads/Papers/Data/manmade/thyroid_train_re_last_test.arff");
+		//		tempLeaner.mCost = mCost;
+		//		tempLeaner.tCost = 1;		
+				int[] tempBlock = {1, 4, 5, 6, 59, 100};
+				int[] tempStates = {0, 0, 1, 1, 2, 0};
+		//		System.out.println("The clustering result is: " + Arrays.toString(tempLeaner.cluster(3, tempBlock)));
+		//		tempLeaner.preLearn();
+		//		avgCost += tempLeaner.totalCost();
+		//		System.out.println("OK");
+		//		for (int i = 0; i < 20; i++) {
+		KMeansActive001 tempLeaner = new KMeansActive001("Data/CAKU.arff", mCost, tCost);
+		//			int[] tempBlock = {1, 4, 5, 6, 59, 121};
+		System.out.println("The clustering result is: " + Arrays.toString(tempLeaner.cluster(tempBlock)));
+		tempLeaner.preLearn();
+		//avgCost += tempLeaner.totalCost();
+		//tempLeaner.instanceStates = tempStates;
+		//tempLeaner.findQueriedInstances(tempBlock);
+		System.out.println("OK");
+		//		}		  
+		System.out.println(tempLeaner.totalCost());
+		
+		//		System.out.println(avgCost / 20);
+
+	}// Of main
+
+	/**
+	 ***************
+	 * preLearn, read the data into a array 
+	 ***************
+	 */
+	void preLearn() {
 		int[] originalBlock = new int[data.numInstances()];
 		for (int i = 0; i < originalBlock.length; i++) {
 			originalBlock[i] = i;
@@ -60,16 +122,106 @@ public class KMeansActive001 {
 
 		//System.out.println("instanceStates: " + Arrays.toString(instanceStates));
 
-		learning(originalBlock);
-
+		learn(originalBlock);
+		//cluster(originalBlock);
 		System.out.println("instanceStates: " + Arrays.toString(instanceStates));
 		System.out.println("labels: " + Arrays.toString(labels));
 
-	}// Of learningTest
+	}// Of preLearn
 
 	/**
 	 ***************
-	 * Cluster. K-Means Cluster
+	 * Active learn. 
+	 ***************
+	 */
+	public void learn(int[] paraBlock) {
+		//if the Block is to small buy the label directly.
+		System.out.println("Learn: " + Arrays.toString(paraBlock));
+		if (paraBlock.length < 5) { //5 is randomly assign according to the size of data
+			System.out.println("The block is too small, buy these labels directly");
+			for (int i = 0; i < paraBlock.length; i++) {
+				instanceStates[paraBlock[i]] = 1;
+				labels[paraBlock[i]] = (int) data.instance(paraBlock[i]).classValue();
+			} // Of for i
+			return;
+		} // Of if
+
+		// Step 1. Scan the existing labels
+		int tempFirstLabel = -1;
+		int tempCurrentIndex = -1;
+		int tempCurrentLabel = -1;
+		//find the first brought point
+		for (int i = 0; i < paraBlock.length; i++) {
+			if (instanceStates[paraBlock[i]] == 1) {
+				tempFirstLabel = (int) data.instance(paraBlock[i]).classValue();
+				tempCurrentIndex = i;
+				break;
+			} // Of if
+		} // Of for i
+
+		// Is it already impure?
+		//find next point of block and decide the next step to split or classify from the next of the tempCurrent index
+		if (tempCurrentIndex != -1) {
+			for (int i = tempCurrentIndex + 1; i < paraBlock.length; i++) {
+				if (instanceStates[paraBlock[i]] == 1) {
+					tempCurrentLabel = (int) data.instance(paraBlock[i]).classValue();
+					//if current label not equal to first label split
+					if (tempCurrentLabel != tempFirstLabel) {
+						// note this method to modify *****
+						splitAndLearn(paraBlock);
+						return;
+					} else {
+					// else Step 3. Predict others in this block.
+						for (int j = 0; j < paraBlock.length; j++) {
+							if (instanceStates[paraBlock[j]] != 1) {
+								instanceStates[paraBlock[j]] = 2;
+								labels[paraBlock[j]] = tempFirstLabel;
+							} // Of if
+						} // Of for i
+					}
+				} // Of if
+			} // Of for i
+		} // Of if
+
+		//find the queried instances 
+		int[] tempQueriedInstance = new int[paraBlock.length];
+		for (int i = 0; i < paraBlock.length; i++) {
+			if (instanceStates[i] == 1) {
+				for (int j = 0; j < paraBlock.length; j++) {
+					tempQueriedInstance[j] = instanceStates[i];
+				}
+			}
+		}
+		// Step 1. Find representatives that the points nearest to the centers.
+		//		int[] tempReprentatives = findRepresentatives(paraBlock, tempFirstLabel);
+		int tempReprentatives = -1;
+		tempReprentatives = findFarthest(paraBlock, findQueriedInstances(paraBlock));
+		if (tempReprentatives != -1) {
+			System.out.println("tempReprentatives = " + paraBlock[tempReprentatives]);
+			int tempIndex = 0;
+			if (tempCurrentIndex == -1) {
+				// Buy the label of the first instances.
+				tempFirstLabel = (int) data.instance(paraBlock[0]).classValue();
+				instanceStates[paraBlock[0]] = 1;
+				labels[paraBlock[0]] = tempFirstLabel;
+				tempIndex++;
+			} // Of if
+
+			// Step 2. Buy labels one by one, and split in two if there are different labels
+			tempCurrentLabel = (int) data.instance(tempReprentatives).classValue();
+			instanceStates[tempReprentatives] = 1;
+			labels[tempReprentatives] = tempCurrentLabel;
+			if (tempCurrentLabel != tempFirstLabel) {
+				splitAndLearn(paraBlock);
+				return;
+			} // Of if
+		} // Of if
+		return;
+	}// Of learning
+
+	/**
+	 ***************
+	 * Cluster. 2-Means Cluster
 	 ***************
 	 */
 	public int[] cluster(int[] paraBlock) {
@@ -78,36 +230,28 @@ public class KMeansActive001 {
 		//System.out.println("+++++++++++BlockSize = " + paraBlock.length);
 		// Step 1. Initialize
 		int paraK = 2;
-		int tempIndex = -1;
+		int[] tempIndex = {};
 		int tempBlockSize = paraBlock.length;
 		int[] tempCluster = new int[tempBlockSize];
 		double[][] tempCenters = new double[paraK][data.numAttributes() - 1];
 		double[][] tempNewCenters = new double[paraK][data.numAttributes() - 1];
-		int[] tempQuiedInstance = new int[paraBlock.length];
-		
-		for (int i = 0; i < paraBlock.length; i++) {
-			if (instanceStates[i]==1) {
-				for (int j = 0; j < tempQuiedInstance.length; j++) {
-					tempQuiedInstance[j] = instanceStates[i];
-				}
-			}
-		}
 
-		// Step 2. Randomly select k data points.
+		// Step 2.  select 2 data points. first is the 0 of block ,second is farthest point
 		for (int i = 0; i < paraK; i++) {
 			//			System.out.println("paraK :" + paraK);
 			//			System.out.println("tempBlocksize " + tempBlockSize);
 			if (i == 0) {
-			    tempIndex = paraBlock[0];
-			}
-			else
-				tempIndex = findFarthest(paraBlock,tempQuiedInstance);
-			//System.out.println("The current index is: " + tempIndex);
+				tempIndex[i] = paraBlock[0];
+			} else
+				tempIndex[i] = findFarthest(paraBlock, findQueriedInstances(paraBlock));
+			System.out.println("The current index is: " + tempIndex);
+			System.out.println("The Queried instances is instance[" + findQueriedInstances(paraBlock) +"]");
 			for (int j = 0; j < data.numAttributes() - 1; j++) {
-				tempNewCenters[i][j] = data.instance(paraBlock[tempIndex]).value(j);
+				tempNewCenters[i][j] = data.instance(paraBlock[tempIndex[i]]).value(j);
+				System.out.println("the tempIndex is : " + Arrays.toString(tempIndex));
 			} // Of for j
 		} // Of for i
-			//System.out.println("Randomly selection: the new centers are: " + Arrays.deepToString(tempNewCenters));
+		System.out.println(" selection: the new centers are: " + Arrays.deepToString(tempNewCenters));
 
 		// Step 3. Cluster and compute new centers.
 		while (!doubleMatricesEqual(tempCenters, tempNewCenters)) {
@@ -141,9 +285,9 @@ public class KMeansActive001 {
 					tempNewCenters[tempCluster[i]][j] += data.instance(paraBlock[i]).value(j); // include the center
 				} // Of for j
 			} // Of for i
-				//System.out.println("............tempNewCenters is " + Arrays.deepToStringr(tempNewCenters));
-				//System.out.println("            tempCounters " + Arrays.toString(tempCounters));
-				//2. Average   Means  conclude the new centers
+			System.out.println("............tempNewCenters is " + Arrays.deepToString(tempNewCenters));
+			System.out.println("            tempCounters " + Arrays.toString(tempCounters));
+			//2. Average   Means  conclude the new centers
 			for (int i = 0; i < paraK; i++) {
 				for (int j = 0; j < data.numAttributes() - 1; j++) {
 					tempNewCenters[i][j] /= tempCounters[i];
@@ -151,90 +295,15 @@ public class KMeansActive001 {
 			} // Of for i
 
 			currentCenters = tempNewCenters;
-			//System.out.println("----The currentCenters are" + Arrays.deepToString(currentCenters));
-			//System.out.println("-----The centers are: " + Arrays.deepToString(tempCenters));
-			//System.out.println("-----The new centers are: " + Arrays.deepToString(tempNewCenters));
+			System.out.println("----The currentCenters are" + Arrays.deepToString(currentCenters));
+			System.out.println("-----The centers are: " + Arrays.deepToString(tempCenters));
+			System.out.println("-----The new centers are: " + Arrays.deepToString(tempNewCenters));
+			System.out.println("-----cluster are :" + Arrays.toString(tempCluster));
 		} // Of while
 
 		return tempCluster;
 	}// Of cluster
 
-	/**
-	 ***************
-	 * Active learning.
-	 ***************
-	 */
-	public void learning(int[] paraBlock) {
-		// 濡傛灉鏁版嵁鍧楀お灏忥紝鐩存帴璐拱鍏ㄩ儴浠ｄ环灏忋��
-		//System.out.println("Learning: " + Arrays.toString(paraBlock));
-		if (paraBlock.length < 5) { //5 is randomly assign according to the size of dataset
-			//System.out.println("The block is too small, buy these labels directly");
-			for (int i = 0; i < paraBlock.length; i++) {
-				instanceStates[paraBlock[i]] = 1; // Buy labels  
-				labels[paraBlock[i]] = (int) data.instance(paraBlock[i]).value(data.numAttributes() - 1);
-			} // Of for i
-			return;
-		} // Of if
-	
-		// Step 1. Scan the existing labels
-		int tempFirstLabel = -1;
-		int tempCurrentIndex = -1;
-		int tempCurrentLabel = -1;
-		for (int i = 0; i < paraBlock.length; i++) {
-			if (instanceStates[paraBlock[i]] == 1) {
-				tempFirstLabel = (int) data.instance(paraBlock[i]).value(data.numAttributes() - 1);
-				tempCurrentIndex = i;
-				break;
-			} // Of if
-		} // Of for i
-	
-		// Is it already impure?
-		if (tempCurrentIndex != -1) {
-			for (int i = tempCurrentIndex + 1; i < paraBlock.length; i++) {
-				if (instanceStates[paraBlock[i]] == 1) {
-					tempCurrentLabel = (int) data.instance(paraBlock[i]).value(data.numAttributes() - 1);
-					if (tempCurrentLabel != tempFirstLabel) {
-						splitAndLearn(paraBlock);
-						return;
-					} // Of if
-				} // Of if
-			} // Of for i
-		} // Of if
-	
-		// Step 1. Find representatives that the points nearest to the centers.
-		int[] tempReprentatives = findRepresentatives(paraBlock, tempFirstLabel);
-		if (tempReprentatives != null) {
-			//System.out.println("tempReprentatives = " + Arrays.toString(tempReprentatives));
-			int tempIndex = 0;
-			if (tempCurrentIndex == -1) {//if tempCurrentIndex
-				// Buy the label of the first representative.
-				tempFirstLabel = (int) data.instance(tempReprentatives[0]).value(data.numAttributes() - 1);
-				instanceStates[tempReprentatives[0]] = 1;
-				labels[tempReprentatives[0]] = tempFirstLabel;
-				tempIndex++;
-			} // Of if
-	
-			// Step 2. Buy labels one by one, and split in two if there are different labels.
-			for (int i = tempIndex; i < tempReprentatives.length; i++) {
-				tempCurrentLabel = (int) data.instance(tempReprentatives[i]).value(data.numAttributes() - 1);
-				instanceStates[tempReprentatives[i]] = 1;
-				labels[tempReprentatives[i]] = tempCurrentLabel;
-				if (tempCurrentLabel != tempFirstLabel) {
-					splitAndLearn(paraBlock);
-					return;
-				} // Of if
-			} // Of for i
-		} // Of for if
-	
-		// Step 3. Predict others in this block.
-		for (int i = 0; i < paraBlock.length; i++) {
-			if (instanceStates[paraBlock[i]] != 1) {
-				instanceStates[paraBlock[i]] = 2;
-				labels[paraBlock[i]] = tempFirstLabel;
-			} // Of if
-		} // Of for i
-		return;
-	}// Of learning
 	/**
 	 ***************
 	 * Split in two and learn.
@@ -247,7 +316,7 @@ public class KMeansActive001 {
 		int splitTimes = 1;
 		//System.out.println("The split time is " + splitTimes++);
 
-		int[] tempClutering = cluster(2, paraBlock);
+		int[] tempClutering = cluster(paraBlock);
 		int tempFirstBlockSize = 0;
 		for (int i = 0; i < tempClutering.length; i++) {
 			if (tempClutering[i] == 0) {
@@ -264,16 +333,17 @@ public class KMeansActive001 {
 			tempBlocks[tempClutering[i]][tempCounters[tempClutering[i]]++] = paraBlock[i];
 		} // Of for i
 
-		//System.out.println("Splitted into two blocks: " + Arrays.toString(tempBlocks[0]) + "\r\n" + Arrays.toString(tempBlocks[1]));
+		System.out.println("Splitted into two blocks: " + Arrays.toString(tempBlocks[0]) + "\r\n"
+				+ Arrays.toString(tempBlocks[1]));
 
 		// Step 2. Learn
-		learning(tempBlocks[0]);
-		learning(tempBlocks[1]);
+		learn(tempBlocks[0]);
+		learn(tempBlocks[1]);
 	}// Of splitAndLearn
 
 	/**
 	 * cost compute cost sensitive 
-	 * @return 
+	 * @return the sum of cost
 	 */
 	public double totalCost() {
 		double cost = 0;
@@ -292,36 +362,27 @@ public class KMeansActive001 {
 	}
 
 	/**
-	 ***************
-	 * The entrance.
-	 ***************
+	 * compute the number of buy 
+	 * @param paraBlock the result of preLearn that is a array of data
+	 * @param tempFirstLabel the first brought label
+	 * @return the number to buy
 	 */
-	public static void main(String args[]) {
-		//why mcost initialize is {2,4} 
-		double[] mCost = { 2, 4 };
-		double avgCost = 0;
-
-		//		KMeansActive tempLeaner = new KMeansActive("/Users/Rjv587/Downloads/Papers/Data/manmade/thyroid_train_re_last_test.arff");
-		//		tempLeaner.mCost = mCost;
-		//		tempLeaner.tCost = 1;		
-		//		int[] tempBlock = {1, 4, 5, 6, 59, 121};
-		//		System.out.println("The clustering result is: " + Arrays.toString(tempLeaner.cluster(3, tempBlock)));
-		//		tempLeaner.learningTest();
-		//		avgCost += tempLeaner.totalCost();
-		//		System.out.println("OK");
-		//		for (int i = 0; i < 20; i++) {
-		KMeansActive001 tempLeaner = new KMeansActive001("Data/flame.arff");
-		tempLeaner.mCost = mCost;
-		tempLeaner.tCost = 1;
-		//			int[] tempBlock = {1, 4, 5, 6, 59, 121};
-		//			System.out.println("The clustering result is: " + Arrays.toString(tempLeaner.cluster(3, tempBlock)));
-		tempLeaner.learningTest();
-		avgCost += tempLeaner.totalCost();
-		System.out.println("OK");
-		//		}		  
-		System.out.println(avgCost);
-		//		System.out.println(avgCost / 20);
-	}// Of main
+	public int numToBuy(int[] paraBlock, int tempFirstLabel) {
+		int[] tempNumBuys = lookup(paraBlock.length);// lookup find optimal R B
+		int tempLabels = 0;
+		for (int i = 0; i < paraBlock.length; i++) {
+			if (instanceStates[paraBlock[i]] == 1) {
+				tempLabels++;
+			} // Of if
+		} // Of for i
+		int tempBuyLabels = 0;
+		if (tempFirstLabel == 0 || tempFirstLabel == 1) {
+			tempBuyLabels = tempNumBuys[tempFirstLabel] - tempLabels;
+		} else {//tempFirstLabel = -1;
+			tempBuyLabels = Math.max(tempNumBuys[0], tempNumBuys[1]) - tempLabels;
+		} // Of if
+		return tempBuyLabels;
+	}
 
 	/**
 	 ***************
@@ -447,6 +508,20 @@ public class KMeansActive001 {
 		// throw new RuntimeException("Error occured in lookup("+pSize+")");
 	}// Of lookup
 
+	public int[] findQueriedInstances(int[] paraBlock) {
+		int tempIndex = 0;
+		int[] tempQueriedInstances = new int[paraBlock.length];
+		for (int i = 0; i < paraBlock.length; i++) {
+				if (instanceStates[i] == 1) {
+					tempQueriedInstances[tempIndex] = paraBlock[i];
+					tempIndex++;
+				}//of if
+		}//of for i
+		System.out.println("The input array is " + Arrays.toString(paraBlock));
+		System.out.println("The queried array is: " + Arrays.toString(tempQueriedInstances));
+		return tempQueriedInstances;
+	}// of findQueriedInstances
+ 	
 	/**
 	 ************************* 
 	 * Find the next farthest instance of the block.
@@ -457,10 +532,9 @@ public class KMeansActive001 {
 	 *            Labeled instances in the current block.
 	 ************************* 
 	 */
-	
+
 	public int findFarthest(int[] paraCurrentBlock, int[] paraLabeledInstances) {
 		int resultFarthest = -1;
-
 		double tempMaxDistanceSum = -1;
 		for (int i = 0; i < paraCurrentBlock.length; i++) {
 			double tempDistanceSum = 0;
@@ -468,11 +542,10 @@ public class KMeansActive001 {
 				if (paraCurrentBlock[i] == paraLabeledInstances[j]) {
 					tempDistanceSum = -1;
 					break;
-				}// Of if
+				} // Of if
 
-				tempDistanceSum += manhattanDistance(paraCurrentBlock[i],
-						paraLabeledInstances[j]);
-			}// Of for j
+				tempDistanceSum += manhattanDistance(paraCurrentBlock[i], paraLabeledInstances[j]);
+			} // Of for j
 
 			System.out.println("" + paraCurrentBlock[i] + " to labeled = " + tempDistanceSum);
 
@@ -480,8 +553,8 @@ public class KMeansActive001 {
 			if (tempDistanceSum > tempMaxDistanceSum + 1e-6) {
 				resultFarthest = paraCurrentBlock[i];
 				tempMaxDistanceSum = tempDistanceSum;
-			}// Of if
-		}// Of for i
+			} // Of if
+		} // Of for i
 		return resultFarthest;
 	}// Of findFarthest
 
@@ -498,11 +571,11 @@ public class KMeansActive001 {
 	public double manhattanDistance(int paraFirstIndex, int paraSecondIndex) {
 		double resultDistance = 0;
 		for (int i = 0; i < data.numAttributes() - 1; i++) {
-			resultDistance += Math.abs(data.instance(paraFirstIndex).value(i) - data.instance(paraSecondIndex).value(i));
-		}// Of for i
+			resultDistance += Math
+					.abs(data.instance(paraFirstIndex).value(i) - data.instance(paraSecondIndex).value(i));
+		} // Of for i
 		return resultDistance;
 	}// Of manhattanDistance
-
 
 	/**
 	 ********************* 
