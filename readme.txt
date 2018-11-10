@@ -1,7 +1,2 @@
-rjv587 or rjjerry
-jerry
-
-who did this
-
 from the mac
-
+take the code to github
