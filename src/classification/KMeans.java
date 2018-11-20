@@ -1,12 +1,10 @@
-package classification;
+package Classification;
 
 import java.util.Arrays;
 //
 //import javax.swing.text.Highlighter;
 //
 //import weka.datagenerators.Test;
-
-import org.junit.experimental.theories.Theories;
 
 
 //import classfication.KNN;
@@ -102,7 +100,6 @@ public class KMeans {
 			tempLeastDistance = Double.MAX_VALUE;
 			for (int j = 0; j < paraCenters.length; j++) {
 				tempDistance = distance(dataset[i], paraCenters[j]);
-				System.out.println("The distance is " + tempDistance);
 				if (tempDistance < tempLeastDistance) {
 					tempLeastDistance = tempDistance;
 					tempIndex = j;

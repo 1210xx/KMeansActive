@@ -1,171 +1,85 @@
-package classification;
+package Classification;
 
 import java.io.FileReader;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Random;
-import java.util.PrimitiveIterator.OfDouble;
 import java.util.function.IntPredicate;
-
-import javax.management.openmbean.OpenMBeanConstructorInfo;
-import javax.xml.crypto.Data;
-
-import org.junit.experimental.theories.DataPoint;
-import org.junit.experimental.theories.Theories;
-import org.junit.validator.PublicClassValidator;
 
 import weka.*;
 import weka.core.Instances;
 
+
 public class RJ_CAKU {
-
-	/**
-	 * the instance status
-	 * 0 untreated
-	 * 1 brought 
-	 * 2 predicted
+	
+	/*
+	 * 0 represents untreated
+	 * 1 represents query 
+	 * 2 represents classify
 	 */
-	int[] instanceStatus;
-
-	/**
-	 * the weka data
-	 */
+	int [] instanceStatus;
+	
 	Instances data;
-
-	/**
-	 * the center of cluster
-	 */
+	
 	double[][] currentCenters;
-
-	/**
-	 * the class value of block
-	 */
+	
 	int[] labels;
-
-	/**
-	 * the misclassification cost
-	 */
-	static double[] mCost;
-
-	/**
-	 * the teach cost
-	 */
-	static double tCost;
-
-	/**
-	 * the random function
-	 */
+	
+	double[]  mCost;
+	
+	double tCost;
+	
 	static Random random = new Random();
-
+	
 	/**
-	 * *************************************
-	 * The constructor.read the file and initialize the cost value
-	 * @param paraFilename the data file 
-	 * @param paraMisclassificationCost	the misclassification cost
-	 * @param paraTeachCost	the teach cost
-	 * *************************************
+	 * the constructor to read the data and initialize array
 	 */
-	public RJ_CAKU(String paraFilename, double[] paraMisclassificationCost, double paraTeachCost) {
+	public RJ_CAKU(String paraFilename) {
 		// TODO Auto-generated constructor stub
 		data = null;
 		try {
 			FileReader fileReader = new FileReader(paraFilename);
 			data = new Instances(fileReader);
 			fileReader.close();
-			data.setClassIndex(data.numAttributes() - 1);
-			//			System.out.println("data.instance[data.numAttributes - 1]:  " + data.instance(1).value(data.numAttributes() - 1));
+			data.setClassIndex(data.numAttributes()-1);
+//			System.out.println("data.instance[data.numAttributes - 1]:  " + data.instance(1).value(data.numAttributes() - 1));
 		} catch (Exception ee) {
 			System.out.println("Cannot read the file: " + paraFilename + "\r\n" + ee);
 			System.exit(0);
 		} // Of try
-			// Initialize
-		mCost = paraMisclassificationCost;
-		tCost = paraTeachCost;
+		// Initialize
 		instanceStatus = new int[data.numInstances()];
 		Arrays.fill(instanceStatus, 0);
 		labels = new int[data.numInstances()];
 		Arrays.fill(labels, -1);
-//		System.out.println(data.instance(0).value(1));
 	}
 
 	/**
-	 *************************************
-	 * the main entrance
-	 * @param args system parameter 
-	 *************************************
+	 ***************
+	 * Learning test.
+	 ***************
 	 */
-	public static void main(String[] args) {
-		// TODO Auto-generated method stub
-		double[] tempMisclassificationCost = {2,4};
-		double tempTeachCost = 1;
-		double avgcost = 0;
-		RJ_CAKU caku = new RJ_CAKU("Data/CAKU.arff", tempMisclassificationCost,tempTeachCost);
-		int[] tempIndex = {0,55};
-//		System.out.println(Arrays.deepToString(caku.indexToInstance(tempIndex)));
-		caku.cluster(caku.prelearn(), caku.indexToInstance(tempIndex));
-//		caku.prelearn();
-//		caku.querySplitClassify(caku.prelearn(),);
-		System.out.println("the Cost is: " + avgcost);
-		System.out.println("Done....");
-	}//of main
-	
-	/**
-	 ***********************************
-	 * The testFunction: from index to instance
-	 * @param paraIndex The given index
-	 * @return The instance from index
-	 ************************************
-	 */
-	public double[][] indexToInstance(int[] paraIndex) {
-		double[][] tempInstances =new double[paraIndex.length][data.numAttributes() - 1];
-		for (int i = 0; i < paraIndex.length; i++) {
-			for (int j = 0; j < data.numAttributes() - 1; j++) {
-//				System.out.println(data.instance(i).value(j));
-				tempInstances[i][j] = data.instance(paraIndex[i]).value(j);
-			}//of for j
-		}//of for i
-		return tempInstances;
-	}//of indexToInstance
-	
-	/**
-	 ***********************************
-	 * pre-learn make the WEKA data into integer array include the all data index
-	 * @return the processed array
-	 ************************************
-	 */
-	public int[] prelearn() {
+	void preLearning() {
 		int[] originalBlock = new int[data.numInstances()];
 		for (int i = 0; i < originalBlock.length; i++) {
 			originalBlock[i] = i;
 		} // Of for i
+		querySplitClassify(originalBlock,originalBlock[0]);
 		System.out.println("instanceStatus: " + Arrays.toString(instanceStatus));
 		System.out.println("labels: " + Arrays.toString(labels));
-		return originalBlock;
 	}// Of learningTest
 	
-	/**
-	 ***********************************
-	 * The main progress 
-	 * @param paraBlock the array to be processed
-	 * @param paraInitialPoint the begin instances index
-	 ************************************
-	 */
-	public void querySplitClassify(int[] paraBlock, int paraInitialPoint) {
-		int tempQuied = 0;
-		for (int i = 0; i < instanceStatus.length; i++) {
-			if (instanceStatus[i] == 1) {
-				tempQuied++;
-			}
-		}
-		
+	
+	public void querySplitClassify(int[] paraBlockInstances, int paraInitialPoint) {
 		//Step 1. How many instances to query
-		int tempNumToBuy = numToBuy(paraBlock, (int)(data.instance(0).value(data.numAttributes() - 1))); //need to modify
+		int[] tempMaxInstancesToQuery = lookup(paraBlockInstances.length);
+
 		//Step 2. Which instances have been queried in this block.
-		int[] tempQueried = new int[tempNumToBuy];
+		int[] tempQueried = new int[tempMaxInstancesToQuery.length];
 		int tempIndex = 0;
-		for (int i = 0; i < paraBlock.length; i ++) {
-			if (instanceStatus[paraBlock[i]] == 1) {
-				tempQueried[tempIndex] = paraBlock[i];
+		for (int i = 0; i < paraBlockInstances.length; i ++) {
+			if (instanceStatus[paraBlockInstances[i]] == 1) {
+				tempQueried[tempIndex] = paraBlockInstances[i];
 				tempIndex ++;
 			}
 		}
@@ -175,14 +89,14 @@ public class RJ_CAKU {
 
 		//Step 4. Query the first instance
 		if (instanceStatus[paraInitialPoint] == 0) {
-			labels[paraInitialPoint] = (int)data.instance(paraInitialPoint).classValue();
+			labels[paraInitialPoint] =  (int) data.instance(paraInitialPoint).value(data.numAttributes()-1);
 			instanceStatus[paraInitialPoint] = 1;
 		}
 		int tempFirstLabel = labels[paraInitialPoint];
 
 		boolean tempPure = true;
 		//Step 5. Query other instances one by one
-		for (int i = 0; i < tempNumToBuy - 1; i ++) {
+		for (int i = 0; i < tempMaxInstancesToQuery[0] - 1; i ++) {
 			//Find the farthest point
 			int tempFarthest = findFarthest();
 			//Query
@@ -197,8 +111,8 @@ public class RJ_CAKU {
 		
 		//Step 6. Now split and 
 		if (!tempPure) {
-			int[][] tempSplitted = cluster(paraBlock,);
-//			int[][] tempSplitted = cluster(paraBlock, tempFirstCenter, tempSecondCenter);
+			int[][] tempSplitted = cluster(paraBlockInstances, 2);
+//			int[][] tempSplitted = cluster(paraBlockInstances, tempFirstCenter, tempSecondCenter);
 
 			querySplitClassify(tempSplitted[0]);
 			querySplitClassify(tempSplitted[1]);
@@ -206,59 +120,88 @@ public class RJ_CAKU {
 			
 		}
 	}//Of querySplitClassify
-
+	
 	/**
 	 ***************
 	 * Cluster. 2-Means Cluster split 
-	 * @param paraBlock The to be processed array
-	 * @param paraK The K value of K-Means
 	 ***************
 	 */
-	public int[] cluster(int[] paraBlock,double[][] paraCenters) {
+	public int[] cluster(int[] paraBlock,int paraK) {
+		//System.out.println("----------clustering K-Means");
+		//System.out.println("----------paraK = " + paraK);
+		//System.out.println("+++++++++++BlockSize = " + paraBlock.length);
 		// Step 1. Initialize
-		double tempLeastDistance;
-		int paraK = 2;
+		paraK = 2;
 		int tempBlockSize = paraBlock.length;
 		int[] tempCluster = new int[tempBlockSize];
-		double[][] tempNewCenters = paraCenters;
 		double[][] tempCenters = new double[paraK][data.numAttributes() - 1];
-		// Step 2. Cluster and compute new centers.
+		double[][] tempNewCenters = new double[paraK][data.numAttributes() - 1];
+		int[] tempQueriedInstances = new int[tempBlockSize];
+ 		//System.out.println("paraK :" + paraK);
+		//System.out.println("tempBlocksize " + tempBlockSize);
+		//System.out.println("The current index is: " + tempIndex);
+		// Step 2. Randomly select 1 data points.
+		int tempFixedIndex = paraBlock[0];
+		//int tempIndex = random.nextInt(tempBlockSize);
+		int tempFirstCenter = tempFixedIndex;	
+		int tempSecondCenter = findFarthest(tempQueriedInstances,paraBlock);
+		int[] tempAllIndex = {tempFirstCenter,tempSecondCenter};
+		for (int i = 0; i < instanceStatus.length; i++) {
+			if (instanceStatus[i] == 1) {
+				for (int j = 0; j < instanceStatus.length; j++) {
+					tempQueriedInstances[j] = i;
+				}
+ 			}
+		}
+				
+		for (int i = 0; i < paraK; i++) {
+			for (int j = 0; j < data.numAttributes() - 1; j++) {
+				tempNewCenters[i][j] = data.instance(paraBlock[tempAllIndex[paraK]]).value(j);
+			} // Of for j
+		} // Of for i
+			//System.out.println("Randomly selection: the new centers are: " + Arrays.deepToString(tempNewCenters));
+		// Step 3. Cluster and compute new centers.
 		while (!doubleMatricesEqual(tempCenters, tempNewCenters)) {
 			//while (!Arrays.deepEquals(tempCenters, tempNewCenters)) {
 			tempCenters = tempNewCenters;
 			// Cluster
 			for (int i = 0; i < tempBlockSize; i++) {
-				tempLeastDistance = Double.MAX_VALUE;
+				double tempDistance = Double.MAX_VALUE;
 				for (int j = 0; j < paraK; j++) {
-					double tempDistance = distance(paraBlock[i], tempCenters[j]);
-					if (tempDistance < tempLeastDistance) {
+					double tempCurrentDistance = distance(paraBlock[i], tempCenters[j]);
+					if (tempCurrentDistance < tempDistance) {
 						tempCluster[i] = j;
-						tempLeastDistance = tempDistance;
-					} // Of if
+						tempDistance = tempCurrentDistance;
+					} // Of cluster
 				} // Of for j
 			} // Of for i
-			System.out.println("Current cluster: " + Arrays.toString(tempCluster));
-			// Compute new centers  count the number of  instances in different class
+			//System.out.println("Current cluster: " + Arrays.toString(tempCluster));
+			// Compute new centers   count the number of  instances in different class
 			int[] tempCounters = new int[paraK];
 			for (int i = 0; i < tempCounters.length; i++) {
 				tempCounters[i] = 0;
 			} // Of for i
 			//1. sum all in one kind
-			tempNewCenters = new double[paraK][data.numAttributes() - 1];  //why define tempNewCenter twice
+			//tempNewCenters = new double[paraK][data.numAttributes() - 1];  //why define tempNewCenter twice
 			for (int i = 0; i < tempBlockSize; i++) {
 				tempCounters[tempCluster[i]]++; //nice expect the center
 				for (int j = 0; j < data.numAttributes() - 1; j++) {
 					tempNewCenters[tempCluster[i]][j] += data.instance(paraBlock[i]).value(j); // include the center
 				} // Of for j
 			} // Of for i
-			
-			//2. Average   Means  conclude the new centers
+				//System.out.println("............tempNewCenters is " + Arrays.deepToStringr(tempNewCenters));
+				//System.out.println("            tempCounters " + Arrays.toString(tempCounters));
+				//2. Average   Means  conclude the new centers
 			for (int i = 0; i < paraK; i++) {
 				for (int j = 0; j < data.numAttributes() - 1; j++) {
 					tempNewCenters[i][j] /= tempCounters[i];
 				} // Of for j
 			} // Of for i
+	
 			currentCenters = tempNewCenters;
+			//System.out.println("----The currentCenters are" + Arrays.deepToString(currentCenters));
+			//System.out.println("-----The centers are: " + Arrays.deepToString(tempCenters));
+			//System.out.println("-----The new centers are: " + Arrays.deepToString(tempNewCenters));
 		} // Of while
 		return tempCluster;
 	}// Of cluster
@@ -266,36 +209,35 @@ public class RJ_CAKU {
 	/**
 	 ********************* 
 	 * Look up optimal R and B
-	 * @param paraBlcokSize the input block size
 	 ********************* 
 	 */
-	private int[] lookup(int paraBlcokSize) {
+	private int[] lookup(int pSize) {
 		// Linear Search
 		//star[] :note the tmpMinCost instance in every query
 		//starLoose: the final MinCost instance index
 		//ra :the expect number of positive instances
 		//ra[0] : compute the final starLoose as the compute the tmpCost
 		//isFind : find the MinCost instance
-		double[] tmpMinCost = new double[] { 0.5 * mCost[0] * paraBlcokSize, 0.5 * mCost[1] * paraBlcokSize };
-		//double[] tmpMinCost = new double[] {mCost[0] * paraBlcokSize, mCost[1] * paraBlcokSize }; //pair with the starLoose computation so use the 0.5
+		double[] tmpMinCost = new double[] { 0.5 * mCost[0] * pSize, 0.5 * mCost[1] * pSize };
+		//double[] tmpMinCost = new double[] {mCost[0] * pSize, mCost[1] * pSize }; //pair with the starLoose computation so use the 0.5
 		int[] star = new int[2];
 		int[] starLoose = new int[2];
 		boolean[] isFind = new boolean[2];
-		double[] ra = new double[paraBlcokSize + 1];
+		double[] ra = new double[pSize + 1];
 		ra[0] = 0.5;
 		double[] tmpCost = new double[2];
-		for (int i = 1; i <= paraBlcokSize; i++) {
-			if (paraBlcokSize >= 1000) {
+		for (int i = 1; i <= pSize; i++) {
+			if (pSize >= 1000) {
 				ra[i] = (i + 1.0) / (i + 2.0); //the expect numbers of positive instances  similarly the N approach  infinite
 			} else {
-				ra[i] = expectPosNum(i, 0, paraBlcokSize) / paraBlcokSize; //else use the CADU equation 4 to compute the ra
+				ra[i] = expectPosNum(i, 0, pSize) / pSize; //else use the CADU equation 4 to compute the ra
 			}
 			for (int j = 0; j < 2; j++) {
-				tmpCost[j] = (1 - ra[i]) * mCost[j] * paraBlcokSize + tCost * i;
+				tmpCost[j] = (1 - ra[i]) * mCost[j] * pSize + tCost * i;
 				if (tmpCost[j] < tmpMinCost[j]) {
 					tmpMinCost[j] = tmpCost[j];
 					star[j] = i;
-					if (i == paraBlcokSize) {
+					if (i == pSize) {
 						Arrays.fill(isFind, true);
 					} // Of if
 				} else {
@@ -309,7 +251,7 @@ public class RJ_CAKU {
 				Arrays.fill(isFind, false);
 				for (int j = 0; j <= i; j++) {
 					for (int k = 0; k < 2; k++) {
-						tmpCost[k] = (1 - ra[j]) * mCost[k] * paraBlcokSize + tCost * j;
+						tmpCost[k] = (1 - ra[j]) * mCost[k] * pSize + tCost * j;
 						if (tmpCost[k] <= tmpMinCost[k] && !isFind[k]) {
 							isFind[k] = true;
 							starLoose[k] = j;
@@ -323,34 +265,9 @@ public class RJ_CAKU {
 			} // Of if
 		} // Of for i
 		return new int[] { 0, 0 };
-		// throw new RuntimeException("Error occured in lookup("+paraBlcokSize+")");
+		// throw new RuntimeException("Error occured in lookup("+pSize+")");
 	}// Of lookup
-
-	/**
-	 ***********************************
-	 * Compute the number to buy use the label Normal distribution
-	 * @param paraBlcok THe block need to compute
-	 * @param tempFirstLabel the first brought label
-	 * @return the number need to buy
-	 ************************************
-	 */
-	public int numToBuy(int[] paraBlock, int tempFirstLabel) {
-		int[] tempNumBuys = lookup(paraBlock.length);// lookup find optimal R B
-		int tempLabels = 0;
-		for (int i = 0; i < paraBlock.length; i++) {
-			if (instanceStatus[paraBlock[i]] == 1) {
-				tempLabels++;
-			} // Of if
-		} // Of for i
-		int tempBuyLabels = 0;
-		if (tempFirstLabel == 0 || tempFirstLabel == 1) {
-			tempBuyLabels = tempNumBuys[tempFirstLabel] - tempLabels;
-		} else {//tempFirstLabel = -1;
-			tempBuyLabels = Math.max(tempNumBuys[0], tempNumBuys[1]) - tempLabels;
-		} // Of if
-		return tempBuyLabels;
-	}
-
+	
 	/**
 	 ************************* 
 	 * Find the next farthest instance of the block.
@@ -371,10 +288,10 @@ public class RJ_CAKU {
 				if (paraCurrentBlock[i] == paraLabeledInstances[j]) {
 					tempDistanceSum = -1;
 					break;
-				} // Of if
+				}// Of if
 
-				tempDistanceSum += manhattanDistance(paraCurrentBlock[i], paraLabeledInstances[j]);
-			} // Of for j
+				tempDistanceSum += manhattanDistance(paraCurrentBlock[i],paraLabeledInstances[j]);
+			}// Of for j
 
 			System.out.println("" + paraCurrentBlock[i] + " to labeled = " + tempDistanceSum);
 
@@ -382,32 +299,30 @@ public class RJ_CAKU {
 			if (tempDistanceSum > tempMaxDistanceSum + 1e-6) {
 				resultFarthest = paraCurrentBlock[i];
 				tempMaxDistanceSum = tempDistanceSum;
-			} // Of if
-		} // Of for i
+			}// Of if
+		}// Of for i
 		return resultFarthest;
 	}// Of findFarthest
 
 	/**
-	 ***********************************
-	 * Compute the Manhattan distance. 
-	 * @param paraFirstIndex the first instance index
-	 * @param paraSecondIndex the second instance index
-	 * @return the distance
-	 ************************************
+	 ************************* 
+	 * Find the next farthest instance of the block.
+	 * 
+	 * @param paraCurrentBlock
+	 *            The given block.
+	 * @param paraLabeledInstances
+	 *            Labeled instances in the current block.
+	 ************************* 
 	 */
 	public double manhattanDistance(int paraFirstIndex, int paraSecondIndex) {
-		double tempResultDistance = 0;
+		double resultDistance = 0;
 		for (int i = 0; i < data.numAttributes() - 1; i++) {
-			tempResultDistance += Math.abs(data.instance(paraFirstIndex).value(i) - data.instance(paraSecondIndex).value(i));
+			resultDistance += Math.abs(data.instance(paraFirstIndex).value(i) - data.instance(paraSecondIndex).value(i));
 		}// Of for i
-	return tempResultDistance;
-	}//of mamhattanDistance
-	
+		
 	/**
-	 *****************************
-	 * Compute Cost ----cost sensitive 
-	 * @return the cost of once
-	 *****************************
+	 * cost compute cost sensitive 
+	 * @return 
 	 */
 	public double totalCost() {
 		double cost = 0;
@@ -419,30 +334,30 @@ public class RJ_CAKU {
 					cost += mCost[0];
 				} else if (labels[i] == 1 && (int) data.instance(i).classValue() == 0) {
 					cost += mCost[1];
-				} // Of else if
-			}//of else
-		}//of for
+				} // Of if
+			}
+		}
 		return cost;
-	}//of totalCost
+	}
 
 	/**
-	 *****************************
+	 ***************
 	 * Compute the distance between an object and an array
-	 *****************************
+	 ***************
 	 */
 	public double distance(int paraIndex, double[] paraArray) {
-		double tempResultDistance = 0;
+		double resultDistance = 0;
 		for (int i = 0; i < paraArray.length; i++) {
-			tempResultDistance += Math.abs(data.instance(paraIndex).value(i) - paraArray[i]);
+			resultDistance += Math.abs(data.instance(paraIndex).value(i) - paraArray[i]);
 		} // Of for i
-		return tempResultDistance;
+		return resultDistance;
 	}// Of distance
-
+	
 	/**
-	 *****************************
+	 ***************
 	 * Is the given matrices equal?
 	 * Judge the center and the new center is equal?
-	 *****************************
+	 ***************
 	 */
 	public static boolean doubleMatricesEqual(double[][] paraMatrix1, double[][] paraMatrix2) {
 		for (int i = 0; i < paraMatrix1.length; i++) { //the number of line
@@ -454,7 +369,8 @@ public class RJ_CAKU {
 		} // Of for i
 		return true;
 	}// Of doubleMatricesEqual
-
+	
+	
 	/**
 	 ********************* 
 	 * Compute the expect number of positive instances.
@@ -471,15 +387,15 @@ public class RJ_CAKU {
 	 ********************* 
 	 */
 	public static double expectPosNum(int R, int B, int N) {
-		BigDecimal numerator = new BigDecimal("0");
-		BigDecimal denominator = new BigDecimal("0");
+		BigDecimal fenzi = new BigDecimal("0");
+		BigDecimal fenmu = new BigDecimal("0");
 		for (int i = R; i <= N - B; i++) {
 			BigDecimal a = A(R, i).multiply(A(B, N - i));
-			numerator = numerator.add(a.multiply(new BigDecimal("" + i)));
-			denominator = denominator.add(a);
-			//System.out.println("a: " + a + ", numerator: " + numerator + ", denominator: " + denominator );
+			fenzi = fenzi.add(a.multiply(new BigDecimal("" + i)));
+			fenmu = fenmu.add(a);
+			//System.out.println("a: " + a + ", fenzi: " + fenzi + ", fenmu: " + fenmu );
 		} // Of for i
-		return numerator.divide(denominator, 4, BigDecimal.ROUND_HALF_EVEN).doubleValue();
+		return fenzi.divide(fenmu, 4, BigDecimal.ROUND_HALF_EVEN).doubleValue();
 	}// Of expectPosNum
 
 	/**
@@ -500,89 +416,19 @@ public class RJ_CAKU {
 		return re;
 	}// Of A
 	
-	/**
-	 ************************************
-	 * The method of integer-array to string
-	 * @param paraArray the target array
-	 * @return the ideal string
-	 ************************************
-	 */
 	public static String intArrayToString(int[] paraArray) {
 		String tempString = "";
 		for (int i = 0; i < paraArray.length - 1; i++) {
 			tempString += paraArray[i] + ",";
 		} // Of for i
+
 		tempString += paraArray[paraArray.length - 1];
+
 		return tempString;
 	}// Of intArrayToString
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
 
-	/**
-	 ***************
-	 * Test Cluster. 2-Means Cluster split 
-	 * @param paraBlock The to be processed array
-	 * @param paraK The K value of K-Means
-	 ***************
-	 */
-	public int[] clusterTest(int[] paraBlock,double[][] paraCenters) {
-		// Step 1. Initialize
-		double tempLeastDistance;
-		int paraK = 2;
-		int tempBlockSize = paraBlock.length;
-		int[] tempCluster = new int[tempBlockSize];
-		double[][] tempNewCenters = paraCenters;
-		double[][] tempCenters = new double[paraK][data.numAttributes() - 1];
-		// Step 2. Cluster and compute new centers.
-		int count = 0;
-		while (!doubleMatricesEqual(tempCenters, tempNewCenters)) {
-			//while (!Arrays.deepEquals(tempCenters, tempNewCenters)) {
-			tempCenters = tempNewCenters;
-			// Cluster
-			for (int i = 0; i < tempBlockSize; i++) {
-				tempLeastDistance = Double.MAX_VALUE;
-				for (int j = 0; j < paraK; j++) {
-					double tempDistance = distance(paraBlock[i], tempCenters[j]);
-					System.out.println("The " + i + " distance to instance[" + j +"] is " + tempDistance);
-					if (tempDistance < tempLeastDistance) {
-						System.out.println("The instance["+ i + "] is blong to "+ j );
-						tempCluster[i] = j;
-						if (j == 1) {
-							count++;
-						}
-						System.out.println("The " + i + " distance to instance[" + j +"] is " + tempDistance);
-						System.out.println("The number of instnace blong to 1 is " + count);
-						tempLeastDistance = tempDistance;
-					} // Of if
-				} // Of for j
-			} // Of for i
-			System.out.println("Current cluster: " + Arrays.toString(tempCluster));
-			// Compute new centers   count the number of  instances in different class
-			int[] tempCounters = new int[paraK];
-			for (int i = 0; i < tempCounters.length; i++) {
-				tempCounters[i] = 0;
-			} // Of for i
-				//1. sum all in one kind
-				//tempNewCenters = new double[paraK][data.numAttributes() - 1];  //why define tempNewCenter twice
-			for (int i = 0; i < tempBlockSize; i++) {
-				tempCounters[tempCluster[i]]++; //nice expect the center
-				for (int j = 0; j < data.numAttributes() - 1; j++) {
-					tempNewCenters[tempCluster[i]][j] += data.instance(paraBlock[i]).value(j); // include the center
-				} // Of for j
-			} // Of for i
-				System.out.println("............tempNewCenters is " + Arrays.deepToString(tempNewCenters));
-				System.out.println("            tempCounters " + Arrays.toString(tempCounters));
-				//2. Average   Means  conclude the new centers
-			for (int i = 0; i < paraK; i++) {
-				for (int j = 0; j < data.numAttributes() - 1; j++) {
-					tempNewCenters[i][j] /= tempCounters[i];
-				} // Of for j
-			} // Of for i
+	}
 
-			currentCenters = tempNewCenters;
-			System.out.println("----The currentCenters are" + Arrays.deepToString(currentCenters));
-			System.out.println("-----The centers are: " + Arrays.deepToString(tempCenters));
-			System.out.println("-----The new centers are: " + Arrays.deepToString(tempNewCenters));
-		} // Of while
-		return tempCluster;
-	}// Of cluster
-	
-}//of RJ_CAKU
+}

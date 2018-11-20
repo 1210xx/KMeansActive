@@ -1,4 +1,4 @@
-package classification;
+package Classification;
 
 import java.io.FileReader;
 import java.math.BigDecimal;
@@ -299,7 +299,7 @@ public class KMeansActive {
 		//		avgCost += tempLeaner.totalCost();
 		//		System.out.println("OK");
 		//		for (int i = 0; i < 20; i++) {
-		KMeansActive tempLeaner = new KMeansActive("/Users/Rjv587/Documents/Data/CAKU/CAKU.arff");
+		KMeansActive tempLeaner = new KMeansActive("Data/flame.arff");
 		tempLeaner.mCost = mCost;
 		tempLeaner.tCost = 1;
 		//			int[] tempBlock = {1, 4, 5, 6, 59, 121};

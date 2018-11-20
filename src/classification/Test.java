@@ -1,4 +1,4 @@
-package classification;
+package Classification;
 
 public class Test {
 

@@ -1,8 +1,7 @@
-package classification;
+package Classification;
 
 import java.io.FileReader;
 import java.util.Arrays;
-import java.util.function.IntBinaryOperator;
 
 import weka.core.*;
 
@@ -12,16 +11,7 @@ public class Caku {
 	 * The decision table.
 	 */
 	Instances data;
-	
-	/**
-	 * 0 represent  virgin
-	 * 1 represent query 
-	 * 2 represent classify
-	 */
-	int[] instanceStatus;
-	
-	double[] labels;
-	
+
 	/**
 	 ************************* 
 	 * Constructor.
@@ -47,7 +37,7 @@ public class Caku {
 		// instanceStates = new int[data.numInstances()];
 		// labels = new int[data.numInstances()];
 		// Arrays.fill(labels, -1);
-	}// Of Kak\\\\\\\\\\\\\\\\\\
+	}// Of Kaku
 	
 	public void querySplitClassify(int[] paraBlockInstances, int paraInitialPoint) {
 		//Step 1. How many instances to query
@@ -68,14 +58,14 @@ public class Caku {
 
 		//Step 4. Query the first instance
 		if (instanceStatus[paraInitialPoint] == 0) {
-			labels[paraInitialPoint] = data.instance(paraInitialPoint).value(data.numAttributes() - 1);
+			labels[paraInitialPoint] = data.instance(paraInitialPoint).classValue();
 			instanceStatus[paraInitialPoint] = 1;
 		}
 		int tempFirstLabel = labels[paraInitialPoint];
 
 		boolean tempPure = true;
 		//Step 5. Query other instances one by one
-		for (int i = 0; i < tempMaxInstancesToQuery[0] - 1; i ++) {
+		for (int i = 0; i < tempMaxInstancesToQuery - 1; i ++) {
 			//Find the farthest point
 			int tempFarthest = findFarthest();
 			//Query
