@@ -12,6 +12,7 @@ public class Caku {
 	 * The decision table.
 	 */
 	Instances data;
+	
 	/**
 	 * 0 represent  virgin
 	 * 1 represent query 

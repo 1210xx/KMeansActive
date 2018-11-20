@@ -4,12 +4,16 @@ import java.io.FileReader;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.PrimitiveIterator.OfDouble;
+import java.util.Random;
 import java.util.function.IntPredicate;
 
 import weka.core.Instances;
 
 public class KMeansActive001 {
-
+	/**
+	 * The random function 
+	 */
+	static Random random =new Random();
 	/**
 	 * the data of class instance
 	 */
@@ -233,34 +237,26 @@ public class KMeansActive001 {
 	 * Cluster. 2-Means Cluster
 	 ***************
 	 */
-	public int[] cluster(int[] paraBlock) {
-		//System.out.println("----------clustering K-Means");
-		//System.out.println("----------paraK = " + paraK);
-		//System.out.println("+++++++++++BlockSize = " + paraBlock.length);
+	public int[] cluster( int[] paraBlock, int paraK) {
+		System.out.println("----------clustering K-Means");
+		System.out.println("----------paraK = " + paraK);
+		System.out.println("+++++++++++BlockSize = " + paraBlock.length);
 		// Step 1. Initialize
-		int paraK = 2;
-		int[] tempIndex = {};
+		paraK = 2;
 		int tempBlockSize = paraBlock.length;
 		int[] tempCluster = new int[tempBlockSize];
 		double[][] tempCenters = new double[paraK][data.numAttributes() - 1];
 		double[][] tempNewCenters = new double[paraK][data.numAttributes() - 1];
 
-		// Step 2.  select 2 data points. first is the 0 of block ,second is farthest point
+		// Step 2.select 2 data points.
 		for (int i = 0; i < paraK; i++) {
-			//			System.out.println("paraK :" + paraK);
-			//			System.out.println("tempBlocksize " + tempBlockSize);
-			if (i == 0) {
-				tempIndex[i] = paraBlock[0];
-			} else
-				tempIndex[i] = findFarthest(paraBlock, findQueriedInstances(paraBlock));
+			int tempIndex = random.nextInt(tempBlockSize);
 			System.out.println("The current index is: " + tempIndex);
-			System.out.println("The Queried instances is instance[" + findQueriedInstances(paraBlock) + "]");
 			for (int j = 0; j < data.numAttributes() - 1; j++) {
-				tempNewCenters[i][j] = data.instance(paraBlock[tempIndex[i]]).value(j);
-				System.out.println("the tempIndex is : " + Arrays.toString(tempIndex));
+				tempNewCenters[i][j] = data.instance(paraBlock[tempIndex]).value(j);
 			} // Of for j
 		} // Of for i
-		System.out.println(" selection: the new centers are: " + Arrays.deepToString(tempNewCenters));
+		System.out.println("Randomly selection: the new centers are: " + Arrays.deepToString(tempNewCenters));
 
 		// Step 3. Cluster and compute new centers.
 		while (!doubleMatricesEqual(tempCenters, tempNewCenters)) {
@@ -278,7 +274,7 @@ public class KMeansActive001 {
 				} // Of for j
 			} // Of for i
 
-			//System.out.println("Current cluster: " + Arrays.toString(tempCluster));
+			System.out.println("Current cluster: " + Arrays.toString(tempCluster));
 
 			// Compute new centers   count the number of  instances in different class
 			int[] tempCounters = new int[paraK];
@@ -307,11 +303,11 @@ public class KMeansActive001 {
 			System.out.println("----The currentCenters are" + Arrays.deepToString(currentCenters));
 			System.out.println("-----The centers are: " + Arrays.deepToString(tempCenters));
 			System.out.println("-----The new centers are: " + Arrays.deepToString(tempNewCenters));
-			System.out.println("-----cluster are :" + Arrays.toString(tempCluster));
 		} // Of while
 
 		return tempCluster;
 	}// Of cluster
+
 
 	/**
 	 ***************
